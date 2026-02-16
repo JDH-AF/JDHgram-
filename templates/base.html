@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>MyGram</title>
+    <style>
+        body { font-family: Helvetica, Arial, sans-serif; background-color: #e5ddd5; margin: 0; }
+        header { background-color: #0088cc; color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; }
+        a { text-decoration: none; color: inherit; }
+        .container { max-width: 800px; margin: 20px auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .btn { background: #0088cc; color: white; padding: 10px 20px; border: none; cursor: pointer; border-radius: 4px; }
+        input[type="text"], input[type="password"], input[type="email"] { width: 100%; padding: 10px; margin: 10px 0; box-sizing: border-box; }
+        .flash { color: red; margin-bottom: 10px; }
+        
+        /* Стили чата */
+        .chat-box { height: 400px; overflow-y: scroll; border: 1px solid #ddd; padding: 10px; background: #efe7dd; display: flex; flex-direction: column; }
+        .message { padding: 8px 15px; margin: 5px; border-radius: 10px; max-width: 70%; width: fit-content; }
+        .sent { background-color: #dcf8c6; align-self: flex-end; } /* Зеленые справа */
+        .received { background-color: #ffffff; align-self: flex-start; } /* Белые слева */
+        .meta { font-size: 0.7em; color: #777; text-align: right; margin-top: 5px; }
+    </style>
+</head>
+<body>
+    <header>
+        <h3><a href="/">MyGram</a></h3>
+        {% if current_user.is_authenticated %}
+            <div>
+                {{ current_user.username }} | <a href="{{ url_for('logout') }}">Выйти</a>
+            </div>
+        {% endif %}
+    </header>
+    <div class="container">
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="flash">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>
