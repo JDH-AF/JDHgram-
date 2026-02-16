@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Чат с {{ recipient.username }}</h3>
+
+<div class="chat-box" id="chatBox">
+    {% for msg in messages %}
+        <div class="message {% if msg.sender_id == current_user.id %}sent{% else %}received{% endif %}">
+            {{ msg.body }}
+            <div class="meta">{{ msg.timestamp.strftime('%H:%M') }}</div>
+        </div>
+    {% endfor %}
+</div>
+
+<form method="POST" style="margin-top: 15px; display: flex;">
+    <input type="text" name="message" placeholder="Напишите сообщение..." required autocomplete="off">
+    <button type="submit" class="btn" style="margin-left: 10px;">Send</button>
+</form>
+
+<script>
+    // Прокрутка вниз при загрузке
+    var chatBox = document.getElementById("chatBox");
+    chatBox.scrollTop = chatBox.scrollHeight;
+</script>
+{% endblock %}
