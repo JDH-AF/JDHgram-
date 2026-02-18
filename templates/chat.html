@@ -4,21 +4,90 @@
 
 <div class="chat-box" id="chatBox">
     {% for msg in messages %}
-        <div class="message {% if msg.sender_id == current_user.id %}sent{% else %}received{% endif %}">
-            {{ msg.body }}
+        <div class="message {% if msg.sender_id == current_user.id %}sent{% else %}received{% endif %}"
+             data-encrypted="{{ msg.body }}">
+            <!-- Здесь будет расшифрованный текст (заполнится через JS) -->
+            <span class="message-text"></span>
             <div class="meta">{{ msg.timestamp.strftime('%H:%M') }}</div>
         </div>
     {% endfor %}
 </div>
 
-<form method="POST" style="margin-top: 15px; display: flex;">
-    <input type="text" name="message" placeholder="Напишите сообщение..." required autocomplete="off">
-    <button type="submit" class="btn" style="margin-left: 10px;">Send</button>
-</form>
+<div style="margin-top: 15px; display: flex;">
+    <input type="text" id="messageInput" placeholder="Напишите сообщение..." autocomplete="off" style="flex: 1;">
+    <button onclick="sendMessage()" class="btn" style="margin-left: 10px;">Отправить</button>
+</div>
+
+<!-- 1. Сначала подключаем SocketIO -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+
+<!-- 2. Подключаем нашу систему шифрования -->
+<script src="/static/js/homophone-cipher.js"></script>
 
 <script>
-    // Прокрутка вниз при загрузке
-    var chatBox = document.getElementById("chatBox");
+// === ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ===
+const socket = io();
+const recipient_id = {{ recipient.id }};
+const my_username = "{{ current_user.username }}";
+
+// === ПРИ ПОДКЛЮЧЕНИИ ===
+socket.on('connect', () => {
+    socket.emit('join', { recipient_id: recipient_id });
+});
+
+// === ОТПРАВКА СООБЩЕНИЯ ===
+function sendMessage() {
+    const input = document.getElementById("messageInput");
+    const plaintext = input.value.trim();
+    if (!plaintext) return;
+
+    // Шифруем прямо в браузере
+    const encrypted = encryptMessage(plaintext, HOMOPHONE_KEY, HOMOPHONE_KEY0);
+
+    socket.emit('send_message', {
+        recipient_id: recipient_id,
+        message: encrypted
+    });
+
+    input.value = "";
+}
+
+// Отправка по Enter
+document.getElementById("messageInput").addEventListener("keypress", (event) => {
+    if (event.key === "Enter") sendMessage();
+});
+
+// === ПОЛУЧЕНИЕ НОВОГО СООБЩЕНИЯ ===
+socket.on('receive_message', (data) => {
+    const decrypted = decryptMessage(data.msg, HOMOPHONE_KEY, HOMOPHONE_KEY0);
+
+    const chatBox = document.getElementById("chatBox");
+
+    const div = document.createElement("div");
+    div.className = `message ${data.user === my_username ? "sent" : "received"}`;
+    div.innerHTML = `
+        <span class="message-text">${decrypted}</span>
+        <div class="meta">${data.timestamp}</div>
+    `;
+
+    chatBox.appendChild(div);
     chatBox.scrollTop = chatBox.scrollHeight;
+});
+
+// === РАСШИФРОВКА ИСТОРИИ ПРИ ЗАГРУЗКЕ ===
+window.addEventListener('load', () => {
+    document.querySelectorAll('.message').forEach(msgDiv => {
+        const encrypted = msgDiv.getAttribute('data-encrypted');
+        if (encrypted) {
+            const decrypted = decryptMessage(encrypted, HOMOPHONE_KEY, HOMOPHONE_KEY0);
+            msgDiv.querySelector('.message-text').textContent = decrypted;
+        }
+    });
+
+    // Прокрутка вниз после расшифровки истории
+    const chatBox = document.getElementById("chatBox");
+    chatBox.scrollTop = chatBox.scrollHeight;
+});
 </script>
+
 {% endblock %}
