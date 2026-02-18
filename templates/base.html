@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>MyGram</title>
+    <title>JDHGram</title>
     <style>
         body { font-family: Helvetica, Arial, sans-serif; background-color: #e5ddd5; margin: 0; }
         header { background-color: #0088cc; color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; }
@@ -22,7 +22,7 @@
 </head>
 <body>
     <header>
-        <h3><a href="/">MyGram</a></h3>
+        <h3><a href="/">JDHGram</a></h3>
         {% if current_user.is_authenticated %}
             <div>
                 {{ current_user.username }} | <a href="{{ url_for('logout') }}">Выйти</a>
