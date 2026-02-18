@@ -73,15 +73,17 @@ def on_join(data):
 @socketio.on('send_message')
 def handle_send_message_event(data):
     recipient_id = int(data['recipient_id'])
-    encrypted = data['message']          # ← уже зашифровано в JS!
+    message_body = data['message']
     room = get_room_name(current_user.id, recipient_id)
 
-    msg = Message(sender_id=current_user.id, recipient_id=recipient_id, body=encrypted)
+    # 1. Сохраняем в БД
+    msg = Message(sender_id=current_user.id, recipient_id=recipient_id, body=message_body)
     db.session.add(msg)
     db.session.commit()
 
+    # 2. Отправляем ВСЕМ в этой комнате (и мне, и ему) мгновенно
     emit('receive_message', {
-        'msg': encrypted,
+        'msg': message_body,
         'user': current_user.username,
         'timestamp': datetime.utcnow().strftime('%H:%M')
     }, room=room)
@@ -134,6 +136,7 @@ def logout():
 @login_required
 def chat(user_id):
     recipient = User.query.get_or_404(user_id)
+    # Загружаем историю
     messages = Message.query.filter(
         ((Message.sender_id == current_user.id) & (Message.recipient_id == user_id)) |
         ((Message.sender_id == user_id) & (Message.recipient_id == current_user.id))
@@ -143,3 +146,4 @@ def chat(user_id):
 
 if __name__ == '__main__':
     socketio.run(app, debug=True)
+
