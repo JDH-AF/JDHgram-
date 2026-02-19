@@ -1,5 +1,6 @@
 from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, abort, session
 import logging
+from sqlalchemy import text
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -10,23 +11,25 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'super-secret-key-change-in-production-2026'  # Не меняй!
+app.config['SECRET_KEY'] = 'super-secret-key-change-in-production-2026'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///telegram_clone.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SESSION_COOKIE_SECURE'] = False  # Для dev; на production True + HTTPS
+app.config['SESSION_COOKIE_SECURE'] = False  # Для dev; в prod True + HTTPS
 
 db = SQLAlchemy(app)
-with app.app_context():
-    db.engine.execute("PRAGMA journal_mode=WAL")
-    logger.info("✅ WAL mode включён для SQLite")
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 socketio = SocketIO(app, cors_allowed_origins="*", logger=True, engineio_logger=True)
 
+# Включение WAL mode (фикс locking)
 with app.app_context():
+    with db.engine.connect() as connection:
+        connection.execute(text("PRAGMA journal_mode=WAL"))
+    logger.info("✅ WAL mode включён для SQLite")
     db.create_all()
     logger.info("✅ База данных готова")
 
+# ====================== MODELS ======================
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(150), unique=True, nullable=False)
@@ -50,13 +53,14 @@ def can_access_chat(current_user, other_id):
         return False
     return User.query.get(other_id) is not None
 
+# ====================== ROUTES ======================
 @app.route('/')
 def index():
     return redirect(url_for('login'))
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
-    logger.debug(f"REGISTER: Метод {request.method}, данные формы: {request.form}")
+    logger.debug(f"REGISTER: Метод {request.method}, данные: {request.form}")
     if request.method == 'POST':
         try:
             email = request.form.get('email')
@@ -68,35 +72,31 @@ def register():
                 return redirect(url_for('register'))
 
             if User.query.filter_by(email=email).first():
-                flash('Этот email уже зарегистрирован', 'danger')
+                flash('Email уже зарегистрирован', 'danger')
                 return redirect(url_for('register'))
             if User.query.filter_by(username=username).first():
-                flash('Это имя пользователя уже занято', 'danger')
+                flash('Имя пользователя занято', 'danger')
                 return redirect(url_for('register'))
 
-            new_user = User(
-                email=email,
-                username=username,
-                password=generate_password_hash(password, method='pbkdf2:sha256')
-            )
+            new_user = User(email=email, username=username, password=generate_password_hash(password))
             db.session.add(new_user)
             db.session.commit()
 
             login_user(new_user, remember=True)
-            session['user_id'] = new_user.id  # Дополнительно для стабильности
+            session['user_id'] = new_user.id
             flash(f'Добро пожаловать, {username}!', 'success')
-            logger.info(f"✅ Новый пользователь {username} зарегистрирован и вошёл")
+            logger.info(f"✅ Пользователь {username} зарегистрирован")
             return redirect(url_for('chat'))
         except Exception as e:
             db.session.rollback()
-            logger.error(f"❌ Ошибка регистрации: {e}")
+            logger.error(f"❌ Ошибка регистрации: {str(e)}", exc_info=True)
             flash('Ошибка. Попробуйте снова.', 'danger')
             return redirect(url_for('register'))
     return render_template('register.html')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    logger.debug(f"LOGIN: Метод {request.method}, данные формы: {request.form}")
+    logger.debug(f"LOGIN: Метод {request.method}, данные: {request.form}")
     if request.method == 'POST':
         email = request.form.get('email')
         password = request.form.get('password')
@@ -120,11 +120,63 @@ def logout():
 @app.route('/chat')
 @login_required
 def chat():
-    logger.debug(f"CHAT: Пользователь {current_user.username} зашёл в чат")
+    logger.debug(f"CHAT: Пользователь {current_user.username}")
     users = User.query.filter(User.id != current_user.id).all()
     return render_template('chat.html', users=users)
 
-# Остальные роуты и SocketIO без изменений (добавь из предыдущей версии)
+@app.route('/api/messages/<int:recipient_id>')
+@login_required
+def api_messages(recipient_id):
+    if not can_access_chat(current_user, recipient_id):
+        abort(403)
+    messages = Message.query.filter(
+        ((Message.sender_id == current_user.id) & (Message.recipient_id == recipient_id)) |
+        ((Message.sender_id == recipient_id) & (Message.recipient_id == current_user.id))
+    ).order_by(Message.timestamp.asc()).all()
+    return jsonify([{
+        'id': m.id,
+        'sender_id': m.sender_id,
+        'content': m.content,
+        'timestamp': m.timestamp.strftime('%H:%M')
+    } for m in messages])
+
+@socketio.on('join')
+def on_join(data):
+    room = data['room']
+    try:
+        uid1, uid2 = map(int, room.split('_'))
+        if current_user.id not in (uid1, uid2):
+            return
+    except:
+        return
+    join_room(room)
+
+@socketio.on('leave')
+def on_leave(data):
+    leave_room(data['room'])
+
+@socketio.on('message')
+def handle_message(data):
+    try:
+        recipient_id = int(data['recipient_id'])
+        content = str(data.get('content', ''))[:2000]
+    except:
+        return
+    if not can_access_chat(current_user, recipient_id):
+        return
+
+    room = '_'.join(sorted([str(current_user.id), str(recipient_id)]))
+
+    msg = Message(sender_id=current_user.id, recipient_id=recipient_id, content=content)
+    db.session.add(msg)
+    db.session.commit()
+
+    emit('new_message', {
+        'sender_id': current_user.id,
+        'username': current_user.username,
+        'content': content,
+        'timestamp': msg.timestamp.strftime('%H:%M')
+    }, room=room)
 
 if __name__ == '__main__':
     socketio.run(app, debug=True, host='0.0.0.0', port=5000)
