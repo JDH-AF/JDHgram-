@@ -1,10 +1,20 @@
-{% extends "base.html" %}
+{% extends 'base.html' %}
 {% block content %}
-<h2>Вход</h2>
-<form method="POST">
-    <input type="email" name="email" placeholder="Email" required>
-    <input type="password" name="password" placeholder="Пароль" required>
-    <button type="submit" class="btn">Войти</button>
-</form>
-<p>Нет аккаунта? <a href="{{ url_for('register') }}" style="color:#0088cc">Регистрация</a></p>
+<div class="login-container">
+    <div class="card bg-dark text-white">
+        <div class="card-body">
+            <h2 class="text-center text-orange mb-4">JDHgram</h2>
+            <form method="POST">
+                <div class="mb-3">
+                    <input type="email" class="form-control bg-secondary text-white" name="email" placeholder="Email" required>
+                </div>
+                <div class="mb-3">
+                    <input type="password" class="form-control bg-secondary text-white" name="password" placeholder="Пароль" required>
+                </div>
+                <button type="submit" class="btn btn-orange w-100">Войти</button>
+            </form>
+            <p class="text-center mt-3">Уже есть аккаунт? <a href="{{ url_for('register') }}" class="text-orange">Зарегистрироваться</a></p>
+        </div>
+    </div>
+</div>
 {% endblock %}
