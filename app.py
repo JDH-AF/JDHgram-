@@ -1,100 +1,42 @@
-import os
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, redirect, url_for, flash, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from flask_socketio import SocketIO, join_room, emit
+from flask_socketio import SocketIO, emit, join_room, leave_room
 from datetime import datetime
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY') or os.urandom(24).hex()
-
-# Настройки БД
-basedir = os.path.abspath(os.path.dirname(__file__))
-db_path = os.path.join(basedir, 'chat.db')
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + db_path
+app.config['SECRET_KEY'] = 'super-secret-key-change-in-production'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///telegram_clone.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
+socketio = SocketIO(app, cors_allowed_origins="*")
 
-# Инициализация SocketIO (разрешаем запросы с любых источников для теста)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
-
-# --- МОДЕЛИ ---
+# ====================== MODELS ======================
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(100), unique=True, nullable=False)
     email = db.Column(db.String(150), unique=True, nullable=False)
-    password_hash = db.Column(db.String(200), nullable=False)
-
-    def set_password(self, password):
-        self.password_hash = generate_password_hash(password, method='pbkdf2:sha256')
-
-    def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
+    username = db.Column(db.String(150), unique=True, nullable=False)
+    password = db.Column(db.String(150), nullable=False)
 
 class Message(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     sender_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     recipient_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    body = db.Column(db.Text, nullable=False)
+    content = db.Column(db.Text, nullable=False)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
-
-    sender = db.relationship('User', foreign_keys=[sender_id], backref='sent_messages')
-    recipient = db.relationship('User', foreign_keys=[recipient_id], backref='received_messages')
 
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-with app.app_context():
-    db.create_all()
-
-# --- ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ---
-def get_room_name(user1_id, user2_id):
-    # Создаем уникальное имя комнаты: всегда "меньшийID_большийID"
-    # Чат между ID 1 и ID 5 всегда будет называться "chat_1_5"
-    u1 = min(user1_id, user2_id)
-    u2 = max(user1_id, user2_id)
-    return f"chat_{u1}_{u2}"
-
-# --- SOCKET EVENTS ---
-
-@socketio.on('join')
-def on_join(data):
-    recipient_id = data['recipient_id']
-    room = get_room_name(current_user.id, int(recipient_id))
-    join_room(room)
-    # Можно отправить системное сообщение (опционально)
-    # emit('message', {'msg': 'Подключено к чату', 'user': 'System'}, room=room)
-
-@socketio.on('send_message')
-def handle_send_message_event(data):
-    recipient_id = int(data['recipient_id'])
-    message_body = data['message']
-    room = get_room_name(current_user.id, recipient_id)
-
-    # 1. Сохраняем в БД
-    msg = Message(sender_id=current_user.id, recipient_id=recipient_id, body=message_body)
-    db.session.add(msg)
-    db.session.commit()
-
-    # 2. Отправляем ВСЕМ в этой комнате (и мне, и ему) мгновенно
-    emit('receive_message', {
-        'msg': message_body,
-        'user': current_user.username,
-        'timestamp': datetime.utcnow().strftime('%H:%M')
-    }, room=room)
-
-# --- ROUTES ---
-
+# ====================== ROUTES ======================
 @app.route('/')
-@login_required
 def index():
-    users = User.query.filter(User.id != current_user.id).all()
-    return render_template('index.html', users=users)
+    return redirect(url_for('login'))
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -103,14 +45,17 @@ def register():
         username = request.form['username']
         password = request.form['password']
         if User.query.filter_by(email=email).first():
-            flash('Email уже занят')
+            flash('Email уже зарегистрирован', 'danger')
             return redirect(url_for('register'))
-        user = User(email=email, username=username)
-        user.set_password(password)
-        db.session.add(user)
+        new_user = User(
+            email=email,
+            username=username,
+            password=generate_password_hash(password, method='pbkdf2:sha256')
+        )
+        db.session.add(new_user)
         db.session.commit()
-        login_user(user)
-        return redirect(url_for('index'))
+        flash('Регистрация успешна! Войдите в аккаунт.', 'success')
+        return redirect(url_for('login'))
     return render_template('register.html')
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -119,11 +64,10 @@ def login():
         email = request.form['email']
         password = request.form['password']
         user = User.query.filter_by(email=email).first()
-        if user and user.check_password(password):
+        if user and check_password_hash(user.password, password):
             login_user(user)
-            return redirect(url_for('index'))
-        else:
-            flash('Неверный логин/пароль')
+            return redirect(url_for('chat'))
+        flash('Неверный email или пароль', 'danger')
     return render_template('login.html')
 
 @app.route('/logout')
@@ -132,18 +76,56 @@ def logout():
     logout_user()
     return redirect(url_for('login'))
 
-@app.route('/chat/<int:user_id>')
+@app.route('/chat')
 @login_required
-def chat(user_id):
-    recipient = User.query.get_or_404(user_id)
-    # Загружаем историю
+def chat():
+    users = User.query.filter(User.id != current_user.id).all()
+    return render_template('chat.html', users=users)
+
+@app.route('/api/messages/<int:recipient_id>')
+@login_required
+def api_messages(recipient_id):
     messages = Message.query.filter(
-        ((Message.sender_id == current_user.id) & (Message.recipient_id == user_id)) |
-        ((Message.sender_id == user_id) & (Message.recipient_id == current_user.id))
-    ).order_by(Message.timestamp).all()
+        ((Message.sender_id == current_user.id) & (Message.recipient_id == recipient_id)) |
+        ((Message.sender_id == recipient_id) & (Message.recipient_id == current_user.id))
+    ).order_by(Message.timestamp.asc()).all()
     
-    return render_template('chat.html', recipient=recipient, messages=messages)
+    return jsonify([{
+        'id': m.id,
+        'sender_id': m.sender_id,
+        'content': m.content,
+        'timestamp': m.timestamp.strftime('%H:%M')
+    } for m in messages])
+
+# ====================== SOCKETIO ======================
+@socketio.on('join')
+def on_join(data):
+    room = data['room']
+    join_room(room)
+
+@socketio.on('leave')
+def on_leave(data):
+    room = data['room']
+    leave_room(room)
+
+@socketio.on('message')
+def handle_message(data):
+    recipient_id = int(data['recipient_id'])
+    content = data['content']
+    room = '_'.join(sorted([str(current_user.id), str(recipient_id)]))
+
+    msg = Message(sender_id=current_user.id, recipient_id=recipient_id, content=content)
+    db.session.add(msg)
+    db.session.commit()
+
+    emit('new_message', {
+        'sender_id': current_user.id,
+        'username': current_user.username,
+        'content': content,
+        'timestamp': msg.timestamp.strftime('%H:%M')
+    }, room=room)
 
 if __name__ == '__main__':
-    socketio.run(app, debug=True)
-
+    with app.app_context():
+        db.create_all()
+    socketio.run(app, debug=True, host='0.0.0.0')
