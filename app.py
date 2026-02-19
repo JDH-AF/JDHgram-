@@ -29,13 +29,17 @@ login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 socketio = SocketIO(app, cors_allowed_origins="*", logger=True, engineio_logger=True)
 
-# WAL + создание таблиц (единственное место с контекстом)
-with app.app_context():
-    with db.engine.connect() as conn:
-        conn.execute(text("PRAGMA journal_mode=WAL"))
-    logger.info("✅ WAL включён")
-    db.create_all()
-    logger.info("✅ База данных готова")
+INITIALIZED = False
+
+@app.before_request
+def init_db_if_needed():
+    global INITIALIZED
+    if not INITIALIZED:
+        with db.engine.connect() as conn:
+            conn.execute(text("PRAGMA journal_mode=WAL"))
+        db.create_all()
+        INITIALIZED = True
+        logger.info("✅ База данных инициализирована (WAL включён)")
 
 # ====================== MODELS ======================
 class User(UserMixin, db.Model):
@@ -60,7 +64,7 @@ def can_access_chat(current_user, other_id):
         return False
     return User.query.get(other_id) is not None
 
-# Retry только для критических операций
+# Retry для операций с БД
 def with_db_retry(max_retries=3):
     def decorator(func):
         def wrapper(*args, **kwargs):
@@ -162,44 +166,41 @@ def api_messages(recipient_id):
 # ====================== SOCKETIO ======================
 @socketio.on('join')
 def on_join(data):
-    with app.app_context():
-        room = data['room']
-        try:
-            uid1, uid2 = map(int, room.split('_'))
-            if current_user.id not in (uid1, uid2):
-                return
-        except:
+    room = data['room']
+    try:
+        uid1, uid2 = map(int, room.split('_'))
+        if current_user.id not in (uid1, uid2):
             return
-        join_room(room)
+    except:
+        return
+    join_room(room)
 
 @socketio.on('leave')
 def on_leave(data):
-    with app.app_context():
-        leave_room(data['room'])
+    leave_room(data['room'])
 
 @socketio.on('message')
 def handle_message(data):
-    with app.app_context():
-        try:
-            recipient_id = int(data['recipient_id'])
-            content = str(data.get('content', ''))[:2000]
-        except:
-            return
-        if not can_access_chat(current_user, recipient_id):
-            return
+    try:
+        recipient_id = int(data['recipient_id'])
+        content = str(data.get('content', ''))[:2000]
+    except:
+        return
+    if not can_access_chat(current_user, recipient_id):
+        return
 
-        room = '_'.join(sorted([str(current_user.id), str(recipient_id)]))
+    room = '_'.join(sorted([str(current_user.id), str(recipient_id)]))
 
-        msg = Message(sender_id=current_user.id, recipient_id=recipient_id, content=content)
-        db.session.add(msg)
-        db.session.commit()
+    msg = Message(sender_id=current_user.id, recipient_id=recipient_id, content=content)
+    db.session.add(msg)
+    db.session.commit()
 
-        emit('new_message', {
-            'sender_id': current_user.id,
-            'username': current_user.username,
-            'content': content,
-            'timestamp': msg.timestamp.strftime('%H:%M')
-        }, room=room)
+    emit('new_message', {
+        'sender_id': current_user.id,
+        'username': current_user.username,
+        'content': content,
+        'timestamp': msg.timestamp.strftime('%H:%M')
+    }, room=room)
 
 if __name__ == '__main__':
     socketio.run(app, debug=True, host='0.0.0.0', port=5000)
