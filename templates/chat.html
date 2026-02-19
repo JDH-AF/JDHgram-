@@ -1,240 +1,59 @@
-{% extends 'base.html' %}
-
+{% extends "base.html" %}
 {% block content %}
-<div class="app">
-    <!-- HEADER -->
-    <header class="header">
-        <div class="logo">JDH <span class="text-orange">Gram</span></div>
-        <div class="user-info">
-            <span class="username">{{ current_user.username }}</span>
-            <a href="{{ url_for('logout') }}" class="btn btn-sm btn-outline-light">Выйти</a>
-        </div>
-    </header>
+<h3>Чат с {{ recipient.username }}</h3>
 
-    <div class="main">
-        <!-- SIDEBAR -->
-        <div class="sidebar">
-            <div class="sidebar-header">Чаты</div>
-            <div class="users-list">
-                {% for user in users %}
-                <div class="user-item" data-id="{{ user.id }}" data-username="{{ user.username }}">
-                    <div class="avatar">👤</div>
-                    <div class="user-name">{{ user.username }}</div>
-                </div>
-                {% endfor %}
-            </div>
+<div class="chat-box" id="chatBox">
+    {% for msg in messages %}
+        <div class="message {% if msg.sender_id == current_user.id %}sent{% else %}received{% endif %}">
+            {{ msg.body }}
+            <div class="meta">{{ msg.timestamp.strftime('%H:%M') }}</div>
         </div>
-
-        <!-- CHAT AREA -->
-        <div class="chat-area">
-            <div id="chat-header" class="chat-header">Выберите чат</div>
-            <div id="messages" class="messages"></div>
-            <div class="input-area">
-                <input type="text" id="message-input" class="form-control bg-secondary text-white border-0" 
-                       placeholder="Напишите сообщение...">
-                <button id="send-btn" class="btn btn-orange">Отправить</button>
-            </div>
-        </div>
-    </div>
+    {% endfor %}
 </div>
 
+<div style="margin-top: 15px; display: flex;">
+    <input type="text" id="messageInput" placeholder="Напишите сообщение..." autocomplete="off">
+    <button onclick="sendMessage()" style="margin-left: 10px; width: auto;">Отправить</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
 <script>
-const socket = io();
-let currentRecipient = null;
-let currentRoom = null;
-const currentUserId = {{ current_user.id | tojson }};
+    var socket = io();
+    var recipient_id = {{ recipient.id }};
+    var my_username = "{{ current_user.username }}";
 
-document.querySelectorAll('.user-item').forEach(item => {
-    item.addEventListener('click', () => {
-        currentRecipient = parseInt(item.dataset.id);
-        const username = item.dataset.username;
-        
-        document.getElementById('chat-header').innerHTML = `
-            <div class="chat-user d-flex align-items-center gap-2">
-                <div class="avatar">👤</div>
-                <strong>${username}</strong>
-            </div>
-        `;
+    socket.on('connect', function() {
+        socket.emit('join', {recipient_id: recipient_id});
+    });
 
-        if (currentRoom) socket.emit('leave', {room: currentRoom});
-        currentRoom = [currentUserId, currentRecipient].sort().join('_');
-        socket.emit('join', {room: currentRoom});
-
-        fetch(`/api/messages/${currentRecipient}`)
-            .then(r => r.json())
-            .then(msgs => {
-                const div = document.getElementById('messages');
-                div.innerHTML = '';
-                msgs.forEach(m => addMessage(m));
-                div.scrollTop = div.scrollHeight;
+    function sendMessage() {
+        var input = document.getElementById("messageInput");
+        var text = input.value;
+        if (text.trim() !== "") {
+            socket.emit('send_message', {
+                recipient_id: recipient_id, 
+                message: text
             });
-    });
-});
-
-document.getElementById('send-btn').addEventListener('click', sendMessage);
-document.getElementById('message-input').addEventListener('keypress', e => {
-    if (e.key === 'Enter') sendMessage();
-});
-
-function sendMessage() {
-    const input = document.getElementById('message-input');
-    const text = input.value.trim();
-    if (!text || !currentRecipient) return;
-    socket.emit('message', { recipient_id: currentRecipient, content: text });
-    input.value = '';
-}
-
-socket.on('new_message', data => {
-    if (parseInt(data.sender_id) === currentRecipient || parseInt(data.sender_id) === currentUserId) {
-        addMessage(data);
+            input.value = ""; 
+        }
     }
-});
 
-function addMessage(msg) {
-    const div = document.getElementById('messages');
-    const isMine = parseInt(msg.sender_id) === currentUserId;
-    const html = `
-        <div class="message ${isMine ? 'mine' : 'theirs'}">
-            <div class="message-content">${msg.content}</div>
-            <div class="timestamp">${msg.timestamp}</div>
-        </div>
-    `;
-    div.insertAdjacentHTML('beforeend', html);
-    div.scrollTop = div.scrollHeight;
-}
-</script>
-{% endblock %}        </div>
-    </div>
-</div>
-
-<script>
-const socket = io();
-let currentRecipient = null;
-let currentRoom = null;
-const currentUserId = {{ current_user.id | tojson }};   // ← безопасно!
-
-document.querySelectorAll('.user-item').forEach(item => {
-    item.addEventListener('click', () => {
-        currentRecipient = parseInt(item.dataset.id);
-        const username = item.dataset.username;
-        
-        document.getElementById('chat-header').innerHTML = `
-            <div class="chat-user">
-                <div class="avatar">👤</div>
-                <div><strong>${username}</strong></div>
-            </div>
-        `;
-
-        if (currentRoom) socket.emit('leave', {room: currentRoom});
-        
-        currentRoom = [currentUserId, currentRecipient].sort().join('_');
-        socket.emit('join', {room: currentRoom});
-
-        fetch(`/api/messages/${currentRecipient}`)
-            .then(r => {
-                if (!r.ok) throw new Error('Нет доступа');
-                return r.json();
-            })
-            .then(msgs => {
-                const div = document.getElementById('messages');
-                div.innerHTML = '';
-                msgs.forEach(m => addMessage(m));
-                div.scrollTop = div.scrollHeight;
-            })
-            .catch(err => console.error(err));
-    });
-});
-
-document.getElementById('send-btn').addEventListener('click', sendMessage);
-document.getElementById('message-input').addEventListener('keypress', e => {
-    if (e.key === 'Enter') sendMessage();
-});
-
-function sendMessage() {
-    const input = document.getElementById('message-input');
-    const text = input.value.trim();
-    if (!text || !currentRecipient) return;
-
-    socket.emit('message', {
-        recipient_id: currentRecipient,
-        content: text
-    });
-    input.value = '';
-}
-
-socket.on('new_message', data => {
-    if (parseInt(data.sender_id) === currentRecipient || parseInt(data.sender_id) === currentUserId) {
-        addMessage(data);
-    }
-});
-
-function addMessage(msg) {
-    const div = document.getElementById('messages');
-    const isMine = parseInt(msg.sender_id) === currentUserId;
-    const html = `
-        <div class="message ${isMine ? 'mine' : 'theirs'}">
-            <div class="message-content">${msg.content}</div>
-            <div class="timestamp">${msg.timestamp}</div>
-        </div>
-    `;
-    div.insertAdjacentHTML('beforeend', html);
-    div.scrollTop = div.scrollHeight;
-}
-</script>
-{% endblock %}
-// === ОТПРАВКА СООБЩЕНИЯ ===
-function sendMessage() {
-    const input = document.getElementById("messageInput");
-    const plaintext = input.value.trim();
-    if (!plaintext) return;
-
-    // Шифруем прямо в браузере
-    const encrypted = encryptMessage(plaintext, HOMOPHONE_KEY, HOMOPHONE_KEY0);
-
-    socket.emit('send_message', {
-        recipient_id: recipient_id,
-        message: encrypted
-    });
-
-    input.value = "";
-}
-
-// Отправка по Enter
-document.getElementById("messageInput").addEventListener("keypress", (event) => {
-    if (event.key === "Enter") sendMessage();
-});
-
-// === ПОЛУЧЕНИЕ НОВОГО СООБЩЕНИЯ ===
-socket.on('receive_message', (data) => {
-    const decrypted = decryptMessage(data.msg, HOMOPHONE_KEY, HOMOPHONE_KEY0);
-
-    const chatBox = document.getElementById("chatBox");
-
-    const div = document.createElement("div");
-    div.className = `message ${data.user === my_username ? "sent" : "received"}`;
-    div.innerHTML = `
-        <span class="message-text">${decrypted}</span>
-        <div class="meta">${data.timestamp}</div>
-    `;
-
-    chatBox.appendChild(div);
-    chatBox.scrollTop = chatBox.scrollHeight;
-});
-
-// === РАСШИФРОВКА ИСТОРИИ ПРИ ЗАГРУЗКЕ ===
-window.addEventListener('load', () => {
-    document.querySelectorAll('.message').forEach(msgDiv => {
-        const encrypted = msgDiv.getAttribute('data-encrypted');
-        if (encrypted) {
-            const decrypted = decryptMessage(encrypted, HOMOPHONE_KEY, HOMOPHONE_KEY0);
-            msgDiv.querySelector('.message-text').textContent = decrypted;
+    document.getElementById("messageInput").addEventListener("keypress", function(event) {
+        if (event.key === "Enter") {
+            sendMessage();
         }
     });
 
-    // Прокрутка вниз после расшифровки истории
-    const chatBox = document.getElementById("chatBox");
-    chatBox.scrollTop = chatBox.scrollHeight;
-});
-</script>
+    socket.on('receive_message', function(data) {
+        var chatBox = document.getElementById("chatBox");
+        var div = document.createElement("div");
+        div.className = "message " + (data.user === my_username ? "sent" : "received");
+        div.innerHTML = data.msg + '<div class="meta">' + data.timestamp + '</div>';
+        chatBox.appendChild(div);
+        chatBox.scrollTop = chatBox.scrollHeight; 
+    });
 
+    var chatBox = document.getElementById("chatBox");
+    chatBox.scrollTop = chatBox.scrollHeight;
+</script>
 {% endblock %}
