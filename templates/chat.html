@@ -42,10 +42,11 @@
 const socket = io();
 let currentRecipient = null;
 let currentRoom = null;
+const currentUserId = {{ current_user.id | tojson }};   // ← безопасно!
 
 document.querySelectorAll('.user-item').forEach(item => {
     item.addEventListener('click', () => {
-        currentRecipient = item.dataset.id;
+        currentRecipient = parseInt(item.dataset.id);
         const username = item.dataset.username;
         
         document.getElementById('chat-header').innerHTML = `
@@ -55,24 +56,23 @@ document.querySelectorAll('.user-item').forEach(item => {
             </div>
         `;
 
-        // Leave old room
         if (currentRoom) socket.emit('leave', {room: currentRoom});
         
-        // Join new room
-        currentRoom = [{{ current_user.id }}, currentRecipient].sort().join('_');
+        currentRoom = [currentUserId, currentRecipient].sort().join('_');
         socket.emit('join', {room: currentRoom});
 
-        // Load history
         fetch(`/api/messages/${currentRecipient}`)
-            .then(r => r.json())
+            .then(r => {
+                if (!r.ok) throw new Error('Нет доступа');
+                return r.json();
+            })
             .then(msgs => {
                 const div = document.getElementById('messages');
                 div.innerHTML = '';
-                msgs.forEach(m => {
-                    addMessage(m);
-                });
+                msgs.forEach(m => addMessage(m));
                 div.scrollTop = div.scrollHeight;
-            });
+            })
+            .catch(err => console.error(err));
     });
 });
 
@@ -94,14 +94,14 @@ function sendMessage() {
 }
 
 socket.on('new_message', data => {
-    if (data.sender_id == currentRecipient || data.sender_id == {{ current_user.id }}) {
+    if (parseInt(data.sender_id) === currentRecipient || parseInt(data.sender_id) === currentUserId) {
         addMessage(data);
     }
 });
 
 function addMessage(msg) {
     const div = document.getElementById('messages');
-    const isMine = msg.sender_id == {{ current_user.id }};
+    const isMine = parseInt(msg.sender_id) === currentUserId;
     const html = `
         <div class="message ${isMine ? 'mine' : 'theirs'}">
             <div class="message-content">${msg.content}</div>
