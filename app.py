@@ -16,6 +16,9 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SESSION_COOKIE_SECURE'] = False  # Для dev; на production True + HTTPS
 
 db = SQLAlchemy(app)
+with app.app_context():
+    db.engine.execute("PRAGMA journal_mode=WAL")
+    logger.info("✅ WAL mode включён для SQLite")
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 socketio = SocketIO(app, cors_allowed_origins="*", logger=True, engineio_logger=True)
