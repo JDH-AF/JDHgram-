@@ -1,14 +1,59 @@
 {% extends "base.html" %}
 {% block content %}
-    <h2>Доступные контакты</h2>
-    <ul style="list-style: none; padding: 0;">
+<style>
+    .contacts-list {
+        list-style: none;
+        padding: 10px;
+        margin: 0;
+    }
+    .contact-item {
+        background: var(--bg-main);
+        margin-bottom: 8px;
+        border-radius: 12px;
+        transition: background 0.2s;
+        border: 1px solid rgba(255,255,255,0.05);
+    }
+    .contact-item:hover {
+        background: #242f3d;
+    }
+    .contact-link {
+        display: flex;
+        align-items: center;
+        padding: 15px;
+        text-decoration: none;
+        color: white;
+    }
+    .avatar {
+        width: 45px;
+        height: 45px;
+        background: var(--accent);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        margin-right: 15px;
+        font-size: 1.2rem;
+    }
+    .username {
+        font-weight: 500;
+        font-size: 1.1rem;
+    }
+</style>
+
+<div style="padding: 15px;">
+    <h2 style="font-size: 1rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 15px;">Ваши контакты</h2>
+    <div class="contacts-list">
         {% for user in users %}
-            <li style="margin-bottom: 10px; padding: 10px; background: #f9f9f9; border-radius: 5px;">
-                <strong>{{ user.username }}</strong> 
-                <a href="{{ url_for('chat', user_id=user.id) }}" style="float: right; text-decoration: none; color: #0088cc;">Написать 💬</a>
-            </li>
+            <div class="contact-item">
+                <a href="{{ url_for('chat', user_id=user.id) }}" class="contact-link">
+                    <div class="avatar">{{ user.username[0] | upper }}</div>
+                    <div class="username">{{ user.username }}</div>
+                </a>
+            </div>
         {% else %}
-            <li>Пока нет других пользователей.</li>
+            <p style="text-align: center; color: var(--text-muted);">Пока здесь никого нет...</p>
         {% endfor %}
-    </ul>
+    </div>
+</div>
 {% endblock %}
