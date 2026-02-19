@@ -1,19 +1,27 @@
 {% extends 'base.html' %}
+
 {% block content %}
-<div class="login-container">
-    <div class="card bg-dark text-white">
-        <div class="card-body">
-            <h2 class="text-center text-orange mb-4">JDHgram</h2>
+<div class="d-flex justify-content-center align-items-center" style="min-height: 80vh;">
+    <div class="card bg-dark text-white shadow-lg" style="width: 380px;">
+        <div class="card-body p-4">
+            <h2 class="text-center mb-4">
+                <span class="text-orange">Telegram</span> Clone
+            </h2>
             <form method="POST">
                 <div class="mb-3">
-                    <input type="email" class="form-control bg-secondary text-white" name="email" placeholder="Email" required>
+                    <input type="email" class="form-control bg-secondary text-white border-0" 
+                           name="email" placeholder="Email" required autofocus>
                 </div>
-                <div class="mb-3">
-                    <input type="password" class="form-control bg-secondary text-white" name="password" placeholder="Пароль" required>
+                <div class="mb-4">
+                    <input type="password" class="form-control bg-secondary text-white border-0" 
+                           name="password" placeholder="Пароль" required>
                 </div>
-                <button type="submit" class="btn btn-orange w-100">Войти</button>
+                <button type="submit" class="btn btn-orange w-100 py-2">Войти</button>
             </form>
-            <p class="text-center mt-3">Уже есть аккаунт? <a href="{{ url_for('register') }}" class="text-orange">Зарегистрироваться</a></p>
+            <div class="text-center mt-4">
+                Нет аккаунта? 
+                <a href="{{ url_for('register') }}" class="text-orange">Зарегистрироваться</a>
+            </div>
         </div>
     </div>
 </div>
