@@ -1,0 +1,133 @@
+:root {
+    --bg: #0f0f0f;
+    --sidebar: #17212b;
+    --accent: #FF7A00;
+    --text: #ffffff;
+    --gray: #2b2b2b;
+}
+
+body { background: var(--bg); color: var(--text); font-family: system-ui; margin:0; height:100vh; overflow:hidden; }
+
+.app { display:flex; flex-direction:column; height:100vh; }
+
+.header {
+    background: #17212b;
+    padding: 12px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #2b2b2b;
+    font-size: 1.3rem;
+    font-weight: bold;
+}
+
+.logo { color: white; }
+.text-orange { color: var(--accent); }
+
+.main { display:flex; flex:1; overflow:hidden; }
+
+.sidebar {
+    width: 280px;
+    background: var(--sidebar);
+    border-right: 1px solid #2b2b2b;
+    display:flex;
+    flex-direction:column;
+}
+
+.sidebar-header {
+    padding: 15px;
+    background: #1f2a38;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.9rem;
+    letter-spacing: 1px;
+}
+
+.user-item {
+    padding: 12px 15px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.user-item:hover { background: #2b3a4a; }
+
+.avatar {
+    width: 42px; height: 42px;
+    background: #3b4a5a;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+}
+
+.chat-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: #0f0f0f;
+}
+
+.chat-header {
+    padding: 15px 20px;
+    background: #17212b;
+    border-bottom: 1px solid #2b2b2b;
+    font-size: 1.1rem;
+}
+
+.messages {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: url('https://i.imgur.com/5v9v5.png') repeat; /* лёгкий паттерн */
+}
+
+.message {
+    max-width: 70%;
+    padding: 10px 15px;
+    border-radius: 18px;
+    position: relative;
+}
+
+.mine {
+    align-self: flex-end;
+    background: var(--accent);
+    color: black;
+    border-bottom-right-radius: 4px;
+}
+
+.theirs {
+    align-self: flex-start;
+    background: #2b2b2b;
+    border-bottom-left-radius: 4px;
+}
+
+.timestamp {
+    font-size: 0.75rem;
+    opacity: 0.7;
+    margin-top: 4px;
+    text-align: right;
+}
+
+.input-area {
+    padding: 12px;
+    background: #17212b;
+    display: flex;
+    gap: 8px;
+}
+
+.btn-orange {
+    background: var(--accent);
+    color: black;
+    border: none;
+}
+
+.btn-orange:hover {
+    background: #ff8c1a;
+}
