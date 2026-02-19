@@ -1,40 +1,118 @@
-{% extends "base.html" %}
+{% extends 'base.html' %}
 {% block content %}
-<h3>Чат с {{ recipient.username }}</h3>
-
-<div class="chat-box" id="chatBox">
-    {% for msg in messages %}
-        <div class="message {% if msg.sender_id == current_user.id %}sent{% else %}received{% endif %}"
-             data-encrypted="{{ msg.body }}">
-            <!-- Здесь будет расшифрованный текст (заполнится через JS) -->
-            <span class="message-text"></span>
-            <div class="meta">{{ msg.timestamp.strftime('%H:%M') }}</div>
+<div class="app">
+    <!-- HEADER -->
+    <header class="header">
+        <div class="logo">TG <span class="text-orange">Clone</span></div>
+        <div class="user-info">
+            <span class="username">{{ current_user.username }}</span>
+            <a href="{{ url_for('logout') }}" class="btn btn-sm btn-outline-light">Выйти</a>
         </div>
-    {% endfor %}
+    </header>
+
+    <div class="main">
+        <!-- SIDEBAR -->
+        <div class="sidebar">
+            <div class="sidebar-header">Чаты</div>
+            <div class="users-list">
+                {% for user in users %}
+                <div class="user-item" data-id="{{ user.id }}" data-username="{{ user.username }}">
+                    <div class="avatar">👤</div>
+                    <div class="user-name">{{ user.username }}</div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- CHAT AREA -->
+        <div class="chat-area">
+            <div id="chat-header" class="chat-header">
+                Выберите чат
+            </div>
+            <div id="messages" class="messages"></div>
+            <div class="input-area">
+                <input type="text" id="message-input" class="form-control" placeholder="Напишите сообщение...">
+                <button id="send-btn" class="btn btn-orange">Отправить</button>
+            </div>
+        </div>
+    </div>
 </div>
-
-<div style="margin-top: 15px; display: flex;">
-    <input type="text" id="messageInput" placeholder="Напишите сообщение..." autocomplete="off" style="flex: 1;">
-    <button onclick="sendMessage()" class="btn" style="margin-left: 10px;">Отправить</button>
-</div>
-
-<!-- 1. Сначала подключаем SocketIO -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
-
-<!-- 2. Подключаем нашу систему шифрования -->
-<script src="/static/js/homophone-cipher.js"></script>
 
 <script>
-// === ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ===
 const socket = io();
-const recipient_id = {{ recipient.id }};
-const my_username = "{{ current_user.username }}";
+let currentRecipient = null;
+let currentRoom = null;
 
-// === ПРИ ПОДКЛЮЧЕНИИ ===
-socket.on('connect', () => {
-    socket.emit('join', { recipient_id: recipient_id });
+document.querySelectorAll('.user-item').forEach(item => {
+    item.addEventListener('click', () => {
+        currentRecipient = item.dataset.id;
+        const username = item.dataset.username;
+        
+        document.getElementById('chat-header').innerHTML = `
+            <div class="chat-user">
+                <div class="avatar">👤</div>
+                <div><strong>${username}</strong></div>
+            </div>
+        `;
+
+        // Leave old room
+        if (currentRoom) socket.emit('leave', {room: currentRoom});
+        
+        // Join new room
+        currentRoom = [{{ current_user.id }}, currentRecipient].sort().join('_');
+        socket.emit('join', {room: currentRoom});
+
+        // Load history
+        fetch(`/api/messages/${currentRecipient}`)
+            .then(r => r.json())
+            .then(msgs => {
+                const div = document.getElementById('messages');
+                div.innerHTML = '';
+                msgs.forEach(m => {
+                    addMessage(m);
+                });
+                div.scrollTop = div.scrollHeight;
+            });
+    });
 });
 
+document.getElementById('send-btn').addEventListener('click', sendMessage);
+document.getElementById('message-input').addEventListener('keypress', e => {
+    if (e.key === 'Enter') sendMessage();
+});
+
+function sendMessage() {
+    const input = document.getElementById('message-input');
+    const text = input.value.trim();
+    if (!text || !currentRecipient) return;
+
+    socket.emit('message', {
+        recipient_id: currentRecipient,
+        content: text
+    });
+    input.value = '';
+}
+
+socket.on('new_message', data => {
+    if (data.sender_id == currentRecipient || data.sender_id == {{ current_user.id }}) {
+        addMessage(data);
+    }
+});
+
+function addMessage(msg) {
+    const div = document.getElementById('messages');
+    const isMine = msg.sender_id == {{ current_user.id }};
+    const html = `
+        <div class="message ${isMine ? 'mine' : 'theirs'}">
+            <div class="message-content">${msg.content}</div>
+            <div class="timestamp">${msg.timestamp}</div>
+        </div>
+    `;
+    div.insertAdjacentHTML('beforeend', html);
+    div.scrollTop = div.scrollHeight;
+}
+</script>
+{% endblock %}
 // === ОТПРАВКА СООБЩЕНИЯ ===
 function sendMessage() {
     const input = document.getElementById("messageInput");
