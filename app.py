@@ -1,9 +1,8 @@
-from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, abort, session, g
+from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, abort, session
 import logging
 import time
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
-from sqlalchemy.orm import scoped_session, sessionmaker
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -24,25 +23,21 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'pool_recycle': 1800,
     'pool_pre_ping': True
 }
-app.config['SESSION_COOKIE_SECURE'] = False
 
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 socketio = SocketIO(app, cors_allowed_origins="*", logger=True, engineio_logger=True)
 
-# Scoped session для request-bound DB sessions
-Session = scoped_session(sessionmaker(bind=db.engine))
-
-# WAL mode
+# WAL + создание таблиц (единственное место с контекстом)
 with app.app_context():
-    with db.engine.connect() as connection:
-        connection.execute(text("PRAGMA journal_mode=WAL"))
+    with db.engine.connect() as conn:
+        conn.execute(text("PRAGMA journal_mode=WAL"))
     logger.info("✅ WAL включён")
     db.create_all()
-    logger.info("✅ База готова")
+    logger.info("✅ База данных готова")
 
-# Models
+# ====================== MODELS ======================
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(150), unique=True, nullable=False)
@@ -58,117 +53,94 @@ class Message(db.Model):
 
 @login_manager.user_loader
 def load_user(user_id):
-    session = Session()
-    user = session.get(User, int(user_id))
-    return user
+    return User.query.get(int(user_id))
 
-# Before/Teardown для scoped session
-@app.before_request
-def before_request():
-    g.db_session = Session()
+def can_access_chat(current_user, other_id):
+    if other_id == current_user.id:
+        return False
+    return User.query.get(other_id) is not None
 
-@app.teardown_request
-def teardown_request(exception=None):
-    session = g.pop('db_session', None)
-    if session is not None:
-        if exception:
-            session.rollback()
-        session.close()
-        Session.remove()  # Удаляем scoped session
+# Retry только для критических операций
+def with_db_retry(max_retries=3):
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            for attempt in range(max_retries):
+                try:
+                    return func(*args, **kwargs)
+                except OperationalError as e:
+                    db.session.rollback()
+                    logger.warning(f"DB retry {attempt+1}: {e}")
+                    if attempt < max_retries - 1:
+                        time.sleep(1.5 ** attempt)
+                    else:
+                        raise
+        return wrapper
+    return decorator
 
-# Retry decorator
-def with_db_retry(func, max_retries=5):
-    def wrapper(*args, **kwargs):
-        for attempt in range(max_retries):
-            try:
-                return func(*args, **kwargs)
-            except OperationalError as e:
-                g.db_session.rollback()
-                logger.warning(f"DB retry {attempt+1}: {str(e)}")
-                if attempt < max_retries - 1:
-                    time.sleep(1.5 ** attempt)  # Backoff: 1.5s, 2.25s, etc.
-                else:
-                    raise
-    return wrapper
-
-# Routes
+# ====================== ROUTES ======================
 @app.route('/')
 def index():
     return redirect(url_for('login'))
 
 @app.route('/register', methods=['GET', 'POST'])
+@with_db_retry()
 def register():
-    logger.debug(f"REGISTER: {request.method}, form: {request.form}")
     if request.method == 'POST':
-        @with_db_retry
-        def do_register():
-            email = request.form.get('email')
-            username = request.form.get('username')
-            password = request.form.get('password')
+        email = request.form.get('email')
+        username = request.form.get('username')
+        password = request.form.get('password')
 
-            if not all([email, username, password]):
-                flash('Заполните поля', 'danger')
-                return redirect(url_for('register'))
-
-            if g.db_session.query(User).filter_by(email=email).first():
-                flash('Email занят', 'danger')
-                return redirect(url_for('register'))
-            if g.db_session.query(User).filter_by(username=username).first():
-                flash('Username занят', 'danger')
-                return redirect(url_for('register'))
-
-            new_user = User(email=email, username=username, password=generate_password_hash(password))
-            g.db_session.add(new_user)
-            g.db_session.commit()
-
-            login_user(new_user, remember=True)
-            session['user_id'] = new_user.id
-            flash(f'Добро пожаловать, {username}!', 'success')
-            logger.info(f"✅ Registered: {username}")
-            return redirect(url_for('chat'))
-
-        try:
-            return do_register()
-        except Exception as e:
-            logger.error(f"❌ Register fail: {str(e)}", exc_info=True)
-            flash('Ошибка. Попробуйте позже.', 'danger')
+        if not all([email, username, password]):
+            flash('Заполните все поля', 'danger')
             return redirect(url_for('register'))
+
+        if User.query.filter_by(email=email).first():
+            flash('Email уже занят', 'danger')
+            return redirect(url_for('register'))
+        if User.query.filter_by(username=username).first():
+            flash('Имя пользователя занято', 'danger')
+            return redirect(url_for('register'))
+
+        new_user = User(
+            email=email,
+            username=username,
+            password=generate_password_hash(password)
+        )
+        db.session.add(new_user)
+        db.session.commit()
+
+        login_user(new_user, remember=True)
+        flash(f'Добро пожаловать, {username}!', 'success')
+        logger.info(f"✅ Зарегистрирован: {username}")
+        return redirect(url_for('chat'))
+
     return render_template('register.html')
 
 @app.route('/login', methods=['GET', 'POST'])
+@with_db_retry()
 def login():
-    logger.debug(f"LOGIN: {request.method}, form: {request.form}")
     if request.method == 'POST':
-        @with_db_retry
-        def do_login():
-            email = request.form.get('email')
-            password = request.form.get('password')
-            user = g.db_session.query(User).filter_by(email=email).first()
-            if user and check_password_hash(user.password, password):
-                login_user(user, remember=True)
-                session['user_id'] = user.id
-                flash('Вход успешен!', 'success')
-                logger.info(f"✅ Login: {user.username}")
-                return redirect(url_for('chat'))
-            flash('Неверные данные', 'danger')
-            return None
-
-        result = do_login()
-        if result:
-            return result
+        email = request.form.get('email')
+        password = request.form.get('password')
+        user = User.query.filter_by(email=email).first()
+        if user and check_password_hash(user.password, password):
+            login_user(user, remember=True)
+            flash('Вы успешно вошли!', 'success')
+            logger.info(f"✅ Вошёл: {user.username}")
+            return redirect(url_for('chat'))
+        flash('Неверный email или пароль', 'danger')
     return render_template('login.html')
 
 @app.route('/logout')
 @login_required
 def logout():
     logout_user()
-    session.clear()
     return redirect(url_for('login'))
 
 @app.route('/chat')
 @login_required
 def chat():
-    users = g.db_session.query(User).filter(User.id != current_user.id).all()
+    users = User.query.filter(User.id != current_user.id).all()
     return render_template('chat.html', users=users)
 
 @app.route('/api/messages/<int:recipient_id>')
@@ -176,7 +148,7 @@ def chat():
 def api_messages(recipient_id):
     if not can_access_chat(current_user, recipient_id):
         abort(403)
-    messages = g.db_session.query(Message).filter(
+    messages = Message.query.filter(
         ((Message.sender_id == current_user.id) & (Message.recipient_id == recipient_id)) |
         ((Message.sender_id == recipient_id) & (Message.recipient_id == current_user.id))
     ).order_by(Message.timestamp.asc()).all()
@@ -187,35 +159,40 @@ def api_messages(recipient_id):
         'timestamp': m.timestamp.strftime('%H:%M')
     } for m in messages])
 
+# ====================== SOCKETIO ======================
 @socketio.on('join')
 def on_join(data):
-    room = data['room']
-    try:
-        uid1, uid2 = map(int, room.split('_'))
-        if current_user.id not in (uid1, uid2):
+    with app.app_context():
+        room = data['room']
+        try:
+            uid1, uid2 = map(int, room.split('_'))
+            if current_user.id not in (uid1, uid2):
+                return
+        except:
             return
-    except:
-        return
-    join_room(room)
+        join_room(room)
 
 @socketio.on('leave')
 def on_leave(data):
-    leave_room(data['room'])
+    with app.app_context():
+        leave_room(data['room'])
 
 @socketio.on('message')
 def handle_message(data):
-    @with_db_retry
-    def do_message():
-        recipient_id = int(data['recipient_id'])
-        content = str(data.get('content', ''))[:2000]
+    with app.app_context():
+        try:
+            recipient_id = int(data['recipient_id'])
+            content = str(data.get('content', ''))[:2000]
+        except:
+            return
         if not can_access_chat(current_user, recipient_id):
             return
 
         room = '_'.join(sorted([str(current_user.id), str(recipient_id)]))
 
         msg = Message(sender_id=current_user.id, recipient_id=recipient_id, content=content)
-        g.db_session.add(msg)
-        g.db_session.commit()
+        db.session.add(msg)
+        db.session.commit()
 
         emit('new_message', {
             'sender_id': current_user.id,
@@ -223,8 +200,6 @@ def handle_message(data):
             'content': content,
             'timestamp': msg.timestamp.strftime('%H:%M')
         }, room=room)
-
-    do_message()  # SocketIO не имеет teardown, но scoped_session поможет
 
 if __name__ == '__main__':
     socketio.run(app, debug=True, host='0.0.0.0', port=5000)
