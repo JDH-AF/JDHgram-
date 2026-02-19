@@ -1,32 +1,10 @@
-{% extends 'base.html' %}
-
+{% extends "base.html" %}
 {% block content %}
-<div class="d-flex justify-content-center align-items-center" style="min-height: 80vh;">
-    <div class="card bg-dark text-white shadow-lg" style="width: 380px;">
-        <div class="card-body p-4">
-            <h2 class="text-center mb-4">
-                <span class="text-orange">JDH</span> Gram
-            </h2>
-            <form method="POST">
-                <div class="mb-3">
-                    <input type="email" class="form-control bg-secondary text-white border-0" 
-                           name="email" placeholder="Email" required>
-                </div>
-                <div class="mb-3">
-                    <input type="text" class="form-control bg-secondary text-white border-0" 
-                           name="username" placeholder="Имя пользователя" required>
-                </div>
-                <div class="mb-4">
-                    <input type="password" class="form-control bg-secondary text-white border-0" 
-                           name="password" placeholder="Пароль" required>
-                </div>
-                <button type="submit" class="btn btn-orange w-100 py-2">Зарегистрироваться</button>
-            </form>
-            <div class="text-center mt-4">
-                Уже есть аккаунт? 
-                <a href="{{ url_for('login') }}" class="text-orange">Войти</a>
-            </div>
-        </div>
-    </div>
-</div>
+    <h2>Регистрация</h2>
+    <form method="POST">
+        <input type="email" name="email" placeholder="Email" required>
+        <input type="text" name="username" placeholder="Имя пользователя" required>
+        <input type="password" name="password" placeholder="Пароль" required>
+        <button type="submit">Зарегистрироваться</button>
+    </form>
 {% endblock %}
