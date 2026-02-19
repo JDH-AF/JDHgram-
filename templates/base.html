@@ -30,14 +30,13 @@
 
         /* Основной контейнер приложения */
         .app-container {
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-            max-width: 600px; /* Ограничение ширины для десктопа */
-            margin: 0 auto;
-            background: var(--bg-panel);
-            position: relative;
-            box-shadow: 0 0 40px rgba(0,0,0,0.5);
+    display: flex;
+    flex-direction: column;
+    height: 100vh; /* Строго на весь экран */
+    max-width: 600px;
+    margin: 0 auto;
+    background: var(--bg-panel);
+    overflow: hidden; /* Важно! */
         }
 
         /* Шапка сайта */
@@ -69,14 +68,17 @@
 
         .header .nav-links a:hover { opacity: 0.8; }
 
-        /* Область контента */
-        .main-content {
-            flex: 1;
-            overflow: hidden; /* Чтобы чат не вылезал за границы */
-            display: flex;
-            flex-direction: column;
-            position: relative;
-        }
+        /* ... внутри <style> в base.html ... */
+
+
+.main-content {
+    flex: 1; /* Занимает всё пространство между шапкой и низом */
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+}
+
 
         /* Уведомления (Flash-сообщения) */
         .flash-messages {
