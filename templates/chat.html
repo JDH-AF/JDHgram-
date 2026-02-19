@@ -1,58 +1,77 @@
 {% extends "base.html" %}
 {% block content %}
 <style>
-    .chat-box {
+    /* Шапка чата с именем */
+    .chat-header {
+        padding: 10px 20px;
+        background: var(--bg-panel);
+        border-bottom: 1px solid #000;
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    }
+    .chat-header .back-btn { text-decoration: none; color: var(--accent); font-size: 1.2rem; }
+    .chat-header .info { font-weight: bold; }
+
+    /* Контейнер сообщений */
+    #chatBox {
         flex: 1;
         overflow-y: auto;
         padding: 15px;
+        display: flex;
+        flex-direction: column; /* Сообщения идут друг за другом */
         background: var(--bg-main);
-        display: block; /* Стандартный блок вместо флекса решает проблемы со скроллом */
     }
 
     .message {
         margin-bottom: 10px;
         padding: 8px 12px;
         border-radius: 12px;
-        clear: both;
-        max-width: 75%;
+        max-width: 80%;
         word-wrap: break-word;
-        position: relative;
         color: white;
-        display: block;
+        position: relative;
     }
 
     .sent {
-        background: var(--msg-sent);
-        float: right;
+        align-self: flex-end; /* Справа */
+        background: var(--accent);
         border-bottom-right-radius: 2px;
     }
 
     .received {
-        background: var(--msg-received);
-        float: left;
+        align-self: flex-start; /* Слева */
+        background: #2b3948;
         border-bottom-left-radius: 2px;
     }
 
     .meta {
         font-size: 0.65rem;
-        margin-top: 4px;
         opacity: 0.7;
+        margin-top: 4px;
         text-align: right;
     }
 
+    /* Поле ввода */
     .input-area {
         padding: 10px;
         background: var(--bg-panel);
         display: flex;
         gap: 10px;
-        border-top: 1px solid #000;
     }
-
     #messageInput { margin: 0; flex: 1; }
-    .send-btn { width: auto; padding: 0 20px; }
+    .send-btn { width: auto; padding: 0 20px; margin: 0; }
 </style>
 
-<div class="chat-box" id="chatBox">
+<div class="chat-header">
+    <a href="{{ url_for('index') }}" class="back-btn">←</a>
+    <div class="info">
+        <div style="font-size: 1rem;">{{ recipient.username }}</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted);">онлайн</div>
+    </div>
+</div>
+
+<div id="chatBox">
     {% for msg in messages %}
         <div class="message {% if msg.sender_id == current_user.id %}sent{% else %}received{% endif %}">
             {{ msg.body }}
@@ -63,41 +82,61 @@
 
 <div class="input-area">
     <input type="text" id="messageInput" placeholder="Сообщение..." autocomplete="off">
-    <button class="send-btn" onclick="sendMessage()">➤</button>
+    <button class="send-btn" id="sendBtn">➤</button>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
 <script>
-    var socket = io();
+    // Подключаемся с явным указанием протоколов для стабильности
+    var socket = io({
+        transports: ['websocket', 'polling']
+    });
+
     var recipient_id = {{ recipient.id }};
     var my_username = "{{ current_user.username }}";
+    var chatBox = document.getElementById("chatBox");
 
+    // Входим в комнату
     socket.on('connect', function() {
+        console.log("Connected!");
         socket.emit('join', {recipient_id: recipient_id});
     });
 
     function sendMessage() {
         var input = document.getElementById("messageInput");
-        if (input.value.trim() !== "") {
+        var text = input.value.trim();
+        if (text !== "") {
+            console.log("Sending:", text);
             socket.emit('send_message', {
                 recipient_id: recipient_id, 
-                message: input.value
+                message: text
             });
             input.value = ""; 
         }
     }
 
+    // Слушаем входящие
     socket.on('receive_message', function(data) {
-        var chatBox = document.getElementById("chatBox");
+        console.log("Received:", data);
         var div = document.createElement("div");
-        div.className = "message " + (data.user === my_username ? "sent" : "received");
+        // Проверяем, кто отправил, чтобы покрасить
+        var isMine = (data.user === my_username);
+        div.className = "message " + (isMine ? "sent" : "received");
+        
         div.innerHTML = data.msg + '<div class="meta">' + data.timestamp + '</div>';
         chatBox.appendChild(div);
+        
+        // Скроллим вниз
         chatBox.scrollTop = chatBox.scrollHeight; 
     });
 
-    // Авто-скролл вниз при загрузке
-    var cb = document.getElementById("chatBox");
-    cb.scrollTop = cb.scrollHeight;
+    // Обработка кнопок
+    document.getElementById("sendBtn").onclick = sendMessage;
+    document.getElementById("messageInput").onkeypress = function(e) {
+        if (e.key === 'Enter') sendMessage();
+    };
+
+    // Авто-скролл при загрузке
+    chatBox.scrollTop = chatBox.scrollHeight;
 </script>
 {% endblock %}
