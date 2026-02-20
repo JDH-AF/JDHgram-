@@ -3,25 +3,21 @@ from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from flask_socketio import SocketIO, join_room, emit
 from datetime import datetime
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'secret_key_123')
+app.config['SECRET_KEY'] = 'your_secret_key_here' # Поменяй на свой случайный набор букв
 
+# Настройка базы данных SQLite
 basedir = os.path.abspath(os.path.dirname(__file__))
-db_path = os.path.join(basedir, 'chat.db')
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + db_path
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'chat.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
-# Инициализация SocketIO
-# В app.py измени строку инициализации:
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet', manage_session=False)
-
+# --- МОДЕЛИ БАЗЫ ДАННЫХ ---
 
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -30,7 +26,7 @@ class User(UserMixin, db.Model):
     password_hash = db.Column(db.String(200), nullable=False)
 
     def set_password(self, password):
-        self.password_hash = generate_password_hash(password, method='pbkdf2:sha256')
+        self.password_hash = generate_password_hash(password)
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
@@ -49,45 +45,16 @@ class Message(db.Model):
 def load_user(user_id):
     return User.query.get(int(user_id))
 
+# Создаем базу данных
 with app.app_context():
     db.create_all()
 
-def get_room_name(user1_id, user2_id):
-    u1 = min(user1_id, user2_id)
-    u2 = max(user1_id, user2_id)
-    return f"chat_{u1}_{u2}"
-
-@socketio.on('join')
-def on_join(data):
-    recipient_id = data['recipient_id']
-    room = get_room_name(current_user.id, int(recipient_id))
-    join_room(room)
-
-@socketio.on('send_message')
-def handle_send_message_event(data):
-    try:
-        recipient_id = int(data['recipient_id'])
-        message_body = data['message']
-        room = get_room_name(current_user.id, recipient_id)
-
-        # Сохранение в БД
-        msg = Message(sender_id=current_user.id, recipient_id=recipient_id, body=message_body)
-        db.session.add(msg)
-        db.session.commit()
-
-        # Отправка всем в комнате
-        emit('receive_message', {
-            'msg': message_body,
-            'user': current_user.username,
-            'timestamp': datetime.utcnow().strftime('%H:%M')
-        }, room=room)
-    except Exception as e:
-        print(f"Error in socket: {e}")
-
+# --- МАРШРУТЫ (ROUTES) ---
 
 @app.route('/')
 @login_required
 def index():
+    # Список всех пользователей, кроме текущего
     users = User.query.filter(User.id != current_user.id).all()
     return render_template('index.html', users=users)
 
@@ -97,9 +64,11 @@ def register():
         email = request.form['email']
         username = request.form['username']
         password = request.form['password']
+        
         if User.query.filter_by(email=email).first():
-            flash('Email уже занят')
+            flash('Этот Email уже занят.')
             return redirect(url_for('register'))
+            
         user = User(email=email, username=username)
         user.set_password(password)
         db.session.add(user)
@@ -114,11 +83,12 @@ def login():
         email = request.form['email']
         password = request.form['password']
         user = User.query.filter_by(email=email).first()
+        
         if user and user.check_password(password):
             login_user(user)
             return redirect(url_for('index'))
         else:
-            flash('Неверный логин/пароль')
+            flash('Неверный логин или пароль.')
     return render_template('login.html')
 
 @app.route('/logout')
@@ -127,17 +97,36 @@ def logout():
     logout_user()
     return redirect(url_for('login'))
 
-@app.route('/chat/<int:user_id>')
+@app.route('/chat/<int:user_id>', methods=['GET', 'POST'])
 @login_required
 def chat(user_id):
     recipient = User.query.get_or_404(user_id)
+
+    # ЛОГИКА ОТПРАВКИ
+    if request.method == 'POST':
+        message_body = request.form.get('message')
+        if message_body:
+            # ЗДЕСЬ можно будет вызвать твой very_very_fun(message_body, ...) 
+            # перед сохранением в базу, если решишь делать шифрование на сервере
+            new_msg = Message(
+                sender_id=current_user.id, 
+                recipient_id=user_id, 
+                body=message_body
+            )
+            db.session.add(new_msg)
+            db.session.commit()
+            return redirect(url_for('chat', user_id=user_id))
+
+    # ВЫБОРКА СООБЩЕНИЙ
     messages = Message.query.filter(
         ((Message.sender_id == current_user.id) & (Message.recipient_id == user_id)) |
         ((Message.sender_id == user_id) & (Message.recipient_id == current_user.id))
     ).order_by(Message.timestamp).all()
+
+    # ЗДЕСЬ можно будет пройтись циклом и вызвать uncode() для каждого сообщения в списке
     
     return render_template('chat.html', recipient=recipient, messages=messages)
 
 if __name__ == '__main__':
-    socketio.run(app, debug=True)
-        
+    app.run(debug=True)
+    
