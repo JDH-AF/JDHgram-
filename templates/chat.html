@@ -1,128 +1,60 @@
 {% extends "base.html" %}
 {% block content %}
 <style>
-    /* ПРИНУДИТЕЛЬНАЯ ВЫСОТА — решаем проблему "исчезновения" */
-    .chat-container {
-        display: flex;
-        flex-direction: column;
-        position: absolute; /* Фиксируем в родительском блоке */
-        top: 0; left: 0; right: 0; bottom: 0;
+    .chat-wrapper {
+        display: flex; flex-direction: column; height: 100vh;
+    }
+    .chat-header {
+        padding: 10px 15px; background: var(--bg-panel); border-bottom: 1px solid #000;
+        display: flex; align-items: center; gap: 15px;
+    }
+    #chatBox {
+        flex: 1; overflow-y: auto; padding: 15px;
+        display: flex; flex-direction: column; gap: 10px;
         background: var(--bg-main);
     }
-
-    #chatBox {
-        flex: 1;
-        overflow-y: scroll;
-        padding: 15px;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        -webkit-overflow-scrolling: touch;
-    }
-
-    /* Сообщения */
     .msg {
-        padding: 10px 14px;
-        border-radius: 15px;
-        color: white;
-        max-width: 80%;
-        word-wrap: break-word;
-        font-size: 1rem;
-        line-height: 1.4;
+        padding: 8px 12px; border-radius: 12px; color: white;
+        max-width: 80%; word-wrap: break-word; font-size: 0.95rem;
     }
-    .my-msg { align-self: flex-end; background: var(--accent); border-bottom-right-radius: 2px; }
-    .their-msg { align-self: flex-start; background: #2b3948; border-bottom-left-radius: 2px; }
+    .sent { align-self: flex-end; background: var(--accent); border-bottom-right-radius: 2px; }
+    .received { align-self: flex-start; background: #2b3948; border-bottom-left-radius: 2px; }
+    .time { font-size: 0.6rem; opacity: 0.6; text-align: right; margin-top: 3px; }
 
-    .time { font-size: 0.7rem; opacity: 0.6; text-align: right; margin-top: 4px; }
-
-    /* Поле ввода */
-    .input-row {
-        padding: 15px;
-        background: var(--bg-panel);
-        display: flex;
-        gap: 10px;
-        border-top: 1px solid #000;
+    .input-form {
+        padding: 15px; background: var(--bg-panel);
+        display: flex; gap: 10px; border-top: 1px solid #000;
     }
-    #messageInput { flex: 1; margin: 0; background: #242f3d; color: #fff; border: none; padding: 12px; border-radius: 10px; }
+    #msgInput { flex: 1; margin: 0; }
+    .send-btn { width: auto; padding: 0 20px; margin: 0; }
 </style>
 
-<div class="chat-container">
-    <div class="chat-header" style="padding: 10px 15px; background: var(--bg-panel); border-bottom: 1px solid #000;">
-        <a href="{{ url_for('index') }}" style="color: var(--accent); text-decoration: none; font-weight: bold;">← Назад</a>
-        <span style="margin-left: 15px; font-weight: bold;">{{ recipient.username }}</span>
+<div class="chat-wrapper">
+    <div class="chat-header">
+        <a href="{{ url_for('index') }}" style="color: var(--accent); text-decoration: none;">←</a>
+        <div style="font-weight: bold;">{{ recipient.username }}</div>
     </div>
 
     <div id="chatBox">
         {% for msg in messages %}
-            <div class="msg {% if msg.sender_id == current_user.id %}my-msg{% else %}their-msg{% endif %}">
+            <div class="msg {% if msg.sender_id == current_user.id %}sent{% else %}received{% endif %}">
                 {{ msg.body }}
                 <div class="time">{{ msg.timestamp.strftime('%H:%M') }}</div>
             </div>
         {% endfor %}
     </div>
 
-    <div class="input-row">
-        <input type="text" id="messageInput" placeholder="Сообщение..." autocomplete="off">
-        <button id="sendBtn" style="width: auto; padding: 0 20px;">Отправить</button>
-    </div>
+    <form class="input-form" method="POST">
+        <input type="text" name="message" id="msgInput" placeholder="Сообщение..." required autocomplete="off" autofocus>
+        <button type="submit" class="send-btn">➤</button>
+    </form>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
 <script>
-    // 1. Инициализация
-    var socket = io({ transports: ['websocket', 'polling'] });
-    var chatBox = document.getElementById("chatBox");
-    var input = document.getElementById("messageInput");
-    var recipient_id = {{ recipient.id }};
-    var my_username = "{{ current_user.username }}";
-
-    // 2. Скролл вниз
-    function scrollDown() {
+    // Автоскролл вниз при загрузке страницы
+    window.onload = function() {
+        var chatBox = document.getElementById("chatBox");
         chatBox.scrollTop = chatBox.scrollHeight;
-    }
-    scrollDown();
-
-    // 3. Функция отрисовки (вызывается и при получении, и при отправке)
-    function addMessageToUI(text, isMine, time) {
-        var div = document.createElement("div");
-        div.className = "msg " + (isMine ? "my-msg" : "their-msg");
-        div.innerHTML = text + '<div class="time">' + time + '</div>';
-        chatBox.appendChild(div);
-        scrollDown();
-    }
-
-    // 4. Логика отправки
-    function sendMessage() {
-        var text = input.value.trim();
-        if (text === "") return;
-
-        // Мгновенно добавляем в UI для теста
-        var now = new Date();
-        var timeStr = now.getHours().toString().padStart(2, '0') + ":" + now.getMinutes().toString().padStart(2, '0');
-        
-        // Отправляем на сервер
-        socket.emit('send_message', {
-            recipient_id: recipient_id,
-            message: text
-        });
-
-        input.value = "";
-    }
-
-    // 5. Получение от сервера
-    socket.on('receive_message', function(data) {
-        // Добавляем сообщение, только если оно от собеседника 
-        // (свои мы уже добавили или добавим через этот же обработчик)
-        var isMine = (data.user === my_username);
-        addMessageToUI(data.msg, isMine, data.timestamp);
-    });
-
-    socket.on('connect', () => {
-        socket.emit('join', {recipient_id: recipient_id});
-    });
-
-    // Кнопки
-    document.getElementById("sendBtn").onclick = sendMessage;
-    input.onkeypress = (e) => { if (e.key === 'Enter') sendMessage(); };
+    };
 </script>
 {% endblock %}
