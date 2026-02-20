@@ -19,7 +19,9 @@ login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
 # Инициализация SocketIO
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
+# В app.py измени строку инициализации:
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet', manage_session=False)
+
 
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -63,19 +65,25 @@ def on_join(data):
 
 @socketio.on('send_message')
 def handle_send_message_event(data):
-    recipient_id = int(data['recipient_id'])
-    message_body = data['message']
-    room = get_room_name(current_user.id, recipient_id)
+    try:
+        recipient_id = int(data['recipient_id'])
+        message_body = data['message']
+        room = get_room_name(current_user.id, recipient_id)
 
-    msg = Message(sender_id=current_user.id, recipient_id=recipient_id, body=message_body)
-    db.session.add(msg)
-    db.session.commit()
+        # Сохранение в БД
+        msg = Message(sender_id=current_user.id, recipient_id=recipient_id, body=message_body)
+        db.session.add(msg)
+        db.session.commit()
 
-    emit('receive_message', {
-        'msg': message_body,
-        'user': current_user.username,
-        'timestamp': datetime.utcnow().strftime('%H:%M')
-    }, room=room)
+        # Отправка всем в комнате
+        emit('receive_message', {
+            'msg': message_body,
+            'user': current_user.username,
+            'timestamp': datetime.utcnow().strftime('%H:%M')
+        }, room=room)
+    except Exception as e:
+        print(f"Error in socket: {e}")
+
 
 @app.route('/')
 @login_required
