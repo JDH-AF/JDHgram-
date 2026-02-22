@@ -1,61 +1,26 @@
 {% extends "base.html" %}
 {% block content %}
 <style>
-    .room-card {
-        background: var(--bg-main);
-        margin: 10px;
-        padding: 20px;
-        border-radius: 12px;
-        border: 1px solid rgba(255,255,255,0.05);
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        text-decoration: none;
-        color: white;
-    }
-    .add-room-btn {
-        background: var(--accent);
-        color: white;
-        text-decoration: none;
-        padding: 15px;
-        border-radius: 12px;
-        display: block;
-        text-align: center;
-        margin: 15px;
-        font-weight: bold;
-    }
-    .modal {
-        background: rgba(0,0,0,0.8);
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        display: none; justify-content: center; align-items: center; z-index: 1000;
-    }
+    .room-link { display: block; padding: 20px; margin: 10px; background: var(--bg-panel); border-radius: 12px; text-decoration: none; color: #fff; border-left: 4px solid var(--accent); }
+    .modal { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); justify-content:center; align-items:center; z-index:100; }
 </style>
 
-<a href="#" class="add-room-btn" onclick="document.getElementById('roomModal').style.display='flex'">+ Создать или войти в комнату</a>
+<button onclick="document.getElementById('m').style.display='flex'" style="margin: 15px; width: calc(100% - 30px)">+ Новая комната</button>
 
-<div id="roomModal" class="modal">
-    <div style="background: var(--bg-panel); padding: 30px; border-radius: 15px; width: 300px;">
-        <h3 style="margin-top:0">Код комнаты</h3>
+<div id="m" class="modal" onclick="if(event.target==this)this.style.display='none'">
+    <div style="background: var(--bg-panel); padding: 20px; border-radius: 12px; width: 80%">
         <form action="{{ url_for('add_room') }}" method="POST">
-            <input type="text" name="room_code" placeholder="Напр. SECRET_77" required>
-            <button type="submit">Подключиться</button>
-            <button type="button" onclick="document.getElementById('roomModal').style.display='none'" style="background:none; color:var(--text-muted)">Отмена</button>
+            <input type="text" name="room_code" placeholder="Код комнаты" required>
+            <button type="submit">Войти / Создать</button>
         </form>
     </div>
 </div>
 
-<div style="padding: 10px;">
-    <h3 style="color: var(--text-muted); padding-left: 10px;">Мои чаты</h3>
-    {% for room in rooms %}
-        <a href="{{ url_for('chat', room_id=room.id) }}" class="room-card">
-            <div>
-                <span style="color: var(--accent); font-weight: bold;">#</span> 
-                {{ room.code }}
-            </div>
-            <span style="font-size: 0.8rem; opacity: 0.5;">➤</span>
-        </a>
+<div style="overflow-y: auto">
+    {% for r in rooms %}
+        <a href="{{ url_for('chat', room_id=r.id) }}" class="room-link"># {{ r.code }}</a>
     {% else %}
-        <p style="text-align: center; opacity: 0.5; margin-top: 50px;">У вас пока нет активных комнат</p>
+        <p style="text-align: center; opacity: 0.5; margin-top: 50px">У вас нет активных комнат</p>
     {% endfor %}
 </div>
 {% endblock %}
