@@ -1,37 +1,24 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>JDH-Gram</title>
     <style>
-        :root { --bg-main: #0e1621; --bg-panel: #17212b; --accent: #f57c00; --text: #fff; }
-        body { margin: 0; background: var(--bg-main); color: var(--text); font-family: sans-serif; }
-        .app { max-width: 600px; margin: 0 auto; display: flex; flex-direction: column; height: 100vh; }
-        header { padding: 15px; background: var(--bg-panel); display: flex; justify-content: space-between; border-bottom: 1px solid #000; }
-        header a { color: var(--accent); text-decoration: none; font-weight: bold; }
-        .content { flex: 1; overflow: hidden; position: relative; display: flex; flex-direction: column; }
-        input { width: 100%; padding: 12px; margin: 10px 0; background: #242f3d; border: none; border-radius: 8px; color: #fff; box-sizing: border-box; }
-        button { width: 100%; padding: 12px; background: var(--accent); border: none; border-radius: 8px; color: #fff; font-weight: bold; cursor: pointer; }
-        .flash { background: rgba(255,0,0,0.2); padding: 10px; text-align: center; font-size: 0.8rem; }
+        body { margin: 0; background: #0e1621; color: white; font-family: sans-serif; }
+        .container { max-width: 600px; margin: 0 auto; height: 100vh; display: flex; flex-direction: column; }
+        header { padding: 15px; background: #17212b; display: flex; justify-content: space-between; }
+        a { color: #f57c00; text-decoration: none; }
     </style>
 </head>
 <body>
-    <div class="app">
+    <div class="container">
         <header>
-            <span style="color: var(--accent)">JDH-Gram</span>
-            <nav>
-                {% if current_user.is_authenticated %}
-                    <a href="{{ url_for('index') }}">Чаты</a>
-                    <a href="{{ url_for('logout') }}" style="margin-left:15px; opacity:0.6">Выход</a>
-                {% else %}
-                    <a href="{{ url_for('login') }}">Вход</a>
-                    <a href="{{ url_for('register') }}" style="margin-left:15px">Регистрация</a>
-                {% endif %}
-            </nav>
+            <span>JDH-Gram</span>
+            {% if current_user.is_authenticated %}
+                <a href="{{ url_for('logout') }}">Выйти</a>
+            {% endif %}
         </header>
-        {% with msgs = get_flashed_messages() %}{% if msgs %}<div class="flash">{{ msgs[0] }}</div>{% endif %}{% endwith %}
-        <div class="content">{% block content %}{% endblock %}</div>
+        {% block content %}{% endblock %}
     </div>
 </body>
 </html>
