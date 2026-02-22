@@ -1,11 +1,14 @@
 {% extends "base.html" %}
 {% block content %}
-<div style="padding: 40px 20px; text-align: center">
+<div style="padding: 40px 20px; text-align: center;">
     <h2>Вход</h2>
     <form method="POST">
-        <input type="text" name="username" placeholder="Имя пользователя" required>
-        <input type="password" name="password" placeholder="Пароль" required>
-        <button type="submit">Войти</button>
+        <input type="email" name="email" placeholder="Email" required style="width: 100%; padding: 10px; margin: 5px 0; border-radius: 5px; border: 1px solid #242f3d; background: #242f3d; color: white;">
+        <input type="password" name="password" placeholder="Пароль" required style="width: 100%; padding: 10px; margin: 5px 0; border-radius: 5px; border: 1px solid #242f3d; background: #242f3d; color: white;">
+        <button type="submit" style="width: 100%; padding: 10px; background: #f57c00; border: none; color: white; border-radius: 5px; margin-top: 10px; cursor: pointer;">Войти</button>
     </form>
+    <p style="margin-top: 20px; font-size: 0.9rem; opacity: 0.7;">
+        Нет аккаунта? <a href="{{ url_for('register') }}" style="color: #f57c00; text-decoration: none;">Зарегистрироваться</a>
+    </p>
 </div>
 {% endblock %}
