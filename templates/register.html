@@ -1,10 +1,15 @@
 {% extends "base.html" %}
 {% block content %}
+<div class="auth-container">
     <h2>Регистрация</h2>
     <form method="POST">
-        <input type="email" name="email" placeholder="Email" required>
-        <input type="text" name="username" placeholder="Имя пользователя" required>
+        <input type="text" name="username" placeholder="Имя пользователя" required autofocus>
         <input type="password" name="password" placeholder="Пароль" required>
-        <button type="submit">Зарегистрироваться</button>
+        <input type="text" name="room_code" placeholder="Код первой комнаты (необязательно)">
+        <button type="submit">Создать аккаунт</button>
     </form>
+    <div class="auth-footer">
+        Есть аккаунт? <a href="{{ url_for('login') }}">Войти</a>
+    </div>
+</div>
 {% endblock %}
