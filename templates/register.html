@@ -1,11 +1,12 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="auth-container">
-    <h2>Старт</h2>
+<div style="padding: 40px 20px; text-align: center">
+    <h2>Регистрация</h2>
     <form method="POST">
-        <input type="text" name="username" placeholder="Имя пользователя" required autofocus>
-        <input type="text" name="room_code" placeholder="Код первой комнаты (необязательно)">
-        <button type="submit">Начать</button>
+        <input type="text" name="username" placeholder="Имя пользователя" required>
+        <input type="password" name="password" placeholder="Пароль" required>
+        <input type="text" name="room_code" placeholder="Код первой комнаты (опция)">
+        <button type="submit">Создать аккаунт</button>
     </form>
 </div>
 {% endblock %}
