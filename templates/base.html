@@ -154,10 +154,8 @@
             <nav class="nav-links">
                 {% if current_user.is_authenticated %}
                     <a href="{{ url_for('index') }}">Чаты</a>
-                    <a href="{{ url_for('logout') }}" style="color: var(--text-muted);">Выход</a>
                 {% else %}
-                    <a href="{{ url_for('login') }}">Вход</a>
-                    <a href="{{ url_for('register') }}">Регистрация</a>
+                    <a href="{{ url_for('register') }}">Старт</a>
                 {% endif %}
             </nav>
         </header>
