@@ -1,59 +1,61 @@
 {% extends "base.html" %}
 {% block content %}
 <style>
-    .contacts-list {
-        list-style: none;
-        padding: 10px;
-        margin: 0;
-    }
-    .contact-item {
+    .room-card {
         background: var(--bg-main);
-        margin-bottom: 8px;
+        margin: 10px;
+        padding: 20px;
         border-radius: 12px;
-        transition: background 0.2s;
         border: 1px solid rgba(255,255,255,0.05);
-    }
-    .contact-item:hover {
-        background: #242f3d;
-    }
-    .contact-link {
         display: flex;
+        justify-content: space-between;
         align-items: center;
-        padding: 15px;
         text-decoration: none;
         color: white;
     }
-    .avatar {
-        width: 45px;
-        height: 45px;
+    .add-room-btn {
         background: var(--accent);
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        color: white;
+        text-decoration: none;
+        padding: 15px;
+        border-radius: 12px;
+        display: block;
+        text-align: center;
+        margin: 15px;
         font-weight: bold;
-        margin-right: 15px;
-        font-size: 1.2rem;
     }
-    .username {
-        font-weight: 500;
-        font-size: 1.1rem;
+    .modal {
+        background: rgba(0,0,0,0.8);
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        display: none; justify-content: center; align-items: center; z-index: 1000;
     }
 </style>
 
-<div style="padding: 15px;">
-    <h2 style="font-size: 1rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 15px;">Ваши контакты</h2>
-    <div class="contacts-list">
-        {% for user in users %}
-            <div class="contact-item">
-                <a href="{{ url_for('chat', user_id=user.id) }}" class="contact-link">
-                    <div class="avatar">{{ user.username[0] | upper }}</div>
-                    <div class="username">{{ user.username }}</div>
-                </a>
-            </div>
-        {% else %}
-            <p style="text-align: center; color: var(--text-muted);">Пока здесь никого нет...</p>
-        {% endfor %}
+<a href="#" class="add-room-btn" onclick="document.getElementById('roomModal').style.display='flex'">+ Создать или войти в комнату</a>
+
+<div id="roomModal" class="modal">
+    <div style="background: var(--bg-panel); padding: 30px; border-radius: 15px; width: 300px;">
+        <h3 style="margin-top:0">Код комнаты</h3>
+        <form action="{{ url_for('add_room') }}" method="POST">
+            <input type="text" name="room_code" placeholder="Напр. SECRET_77" required>
+            <button type="submit">Подключиться</button>
+            <button type="button" onclick="document.getElementById('roomModal').style.display='none'" style="background:none; color:var(--text-muted)">Отмена</button>
+        </form>
     </div>
+</div>
+
+<div style="padding: 10px;">
+    <h3 style="color: var(--text-muted); padding-left: 10px;">Мои чаты</h3>
+    {% for room in rooms %}
+        <a href="{{ url_for('chat', room_id=room.id) }}" class="room-card">
+            <div>
+                <span style="color: var(--accent); font-weight: bold;">#</span> 
+                {{ room.code }}
+            </div>
+            <span style="font-size: 0.8rem; opacity: 0.5;">➤</span>
+        </a>
+    {% else %}
+        <p style="text-align: center; opacity: 0.5; margin-top: 50px;">У вас пока нет активных комнат</p>
+    {% endfor %}
 </div>
 {% endblock %}
