@@ -1,10 +1,10 @@
+<!-- templates/login.html -->
 {% extends "base.html" %}
 {% block content %}
 <div class="auth-form">
     <h2 style="text-align: center; color: var(--accent);">Вход в JDH-Gram</h2>
     <form method="POST">
-        <input type="email" name="email" placeholder="Ваш Email" required>
-        <input type="password" name="password" placeholder="Пароль" required>
+        <input type="text" name="username" placeholder="Имя пользователя" required>
         <button type="submit">Войти</button>
     </form>
     
