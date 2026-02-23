@@ -1,0 +1,17 @@
+<!-- templates/create_chat.html -->
+{% extends "base.html" %}
+{% block content %}
+<div class="auth-form">
+    <h2 style="text-align: center; color: var(--accent);">Создать или присоединиться к чату</h2>
+    <form method="POST">
+        <input type="text" name="key" placeholder="Введите ключ" required>
+        <button type="submit">Подтвердить</button>
+    </form>
+    
+    <p style="text-align: center; margin-top: 20px; font-size: 0.9rem; color: var(--text-muted);">
+        <a href="{{ url_for('index') }}" style="color: var(--accent); text-decoration: none; font-weight: bold;">
+            Назад
+        </a>
+    </p>
+</div>
+{% endblock %}
