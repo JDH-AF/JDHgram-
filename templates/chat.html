@@ -1,3 +1,4 @@
+<!-- templates/chat.html -->
 {% extends "base.html" %}
 {% block content %}
 <style>
@@ -32,7 +33,14 @@
 <div class="chat-wrapper">
     <div class="chat-header">
         <a href="{{ url_for('index') }}" style="color: var(--accent); text-decoration: none;">←</a>
-        <div style="font-weight: bold;">{{ recipient.username }}</div>
+        <div style="font-weight: bold;">
+            {% set other_users = chat_room.users | rejectattr('id', 'eq', current_user.id) | list %}
+            {% if other_users %}
+                {{ other_users[0].username }}
+            {% else %}
+                Ожидание собеседника
+            {% endif %}
+        </div>
     </div>
 
     <div id="chatBox">
