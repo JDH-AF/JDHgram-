@@ -1,18 +1,19 @@
-<!-- templates/register.html -->
 {% extends "base.html" %}
 {% block content %}
-<div class="auth-form">
-    <h2 style="text-align: center; color: var(--accent);">Регистрация</h2>
+<div class="auth-container">
+    <h2>Вход в JDH-Gram</h2>
     <form method="POST">
-        <input type="text" name="username" placeholder="Имя пользователя" required>
-        <button type="submit">Зарегистрироваться</button>
+        <input type="text" name="username" placeholder="Придумайте ник" required autofocus>
+        
+        <input type="email" name="email" placeholder="Ваш Email" required>
+        
+        <input type="email" name="confirm_email" placeholder="Повторите Email" required>
+        
+        <button type="submit">Войти / Создать аккаунт</button>
     </form>
     
-    <p style="text-align: center; margin-top: 20px; font-size: 0.9rem; color: var(--text-muted);">
-        Уже есть аккаунт? 
-        <a href="{{ url_for('login') }}" style="color: var(--accent); text-decoration: none; font-weight: bold;">
-            Войти
-        </a>
+    <p style="margin-top: 15px; font-size: 0.8rem; color: var(--text-muted);">
+        * Email используется для идентификации вашего аккаунта.
     </p>
 </div>
 {% endblock %}
