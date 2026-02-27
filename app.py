@@ -27,6 +27,7 @@ association_table = db.Table('user_chat',
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(100), unique=True, nullable=False)
+    email = db.Column(db.String(150), unique=True, nullable=False) # Новое поле
     sent_messages = db.relationship('Message', foreign_keys='Message.sender_id', backref='sender', lazy=True)
     chats = db.relationship('Chat', secondary=association_table, backref='users')
 
@@ -58,22 +59,44 @@ def index():
     # Список чатов текущего пользователя
     chats = current_user.chats
     return render_template('index.html', chats=chats)
-
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
-        username = request.form['username']
-        
+        username = request.form.get('username')
+        email = request.form.get('email')
+        confirm_email = request.form.get('confirm_email')
+
+        # 1. Проверка на совпадение почты
+        if email != confirm_email:
+            flash('Email не совпадают! Проверьте правильность ввода.')
+            return redirect(url_for('register'))
+
+        # 2. Проверка, существует ли уже такая почта
+        user_by_email = User.query.filter_by(email=email).first()
+        if user_by_email:
+            # Если почта есть, мы можем либо выдать ошибку, либо просто залогинить
+            # Для твоей концепции "быстрого входа" — просто логиним
+            login_user(user_by_email)
+            return redirect(url_for('index'))
+
+        # 3. Проверка уникальности имени пользователя
         if User.query.filter_by(username=username).first():
             flash('Это имя пользователя уже занято.')
             return redirect(url_for('register'))
-            
-        user = User(username=username)
+
+        # 4. Создание нового пользователя
+        user = User(username=username, email=email)
         db.session.add(user)
-        db.session.commit()
-        login_user(user)
-        return redirect(url_for('index'))
+        try:
+            db.session.commit()
+            login_user(user)
+            return redirect(url_for('index'))
+        except:
+            db.session.rollback()
+            flash('Произошла ошибка при регистрации.')
+            
     return render_template('register.html')
+
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
